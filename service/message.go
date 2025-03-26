@@ -1,46 +1,131 @@
 package service
 
 import (
-	"context"
 	"fmt"
-
-	lark "github.com/larksuite/oapi-sdk-go/v3"
-	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
-	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
+	"math/rand"
+	"messagePush/models"
+	"messagePush/utils"
+	"time"
 )
 
-type MessageParams struct {
-	ReceiveId string
-	MsgType   string
-	Content   string //序列化后的json字符串
+const (
+	MessageStatusCreated = 1
+	MessageStatusSending = 2
+	MessageStatusSuccess = 3
+	MessageStatusFail    = 4
+)
+
+type CreateMessageParams struct {
+	subject  string
+	to       string
+	channel  int
+	sourceID string
 }
 
-func SendMessage(client *lark.Client, param MessageParams) error {
-	req := larkim.NewCreateMessageReqBuilder().
-		ReceiveIdType(`open_id`).
-		Body(larkim.NewCreateMessageReqBodyBuilder().
-			ReceiveId(param.ReceiveId).
-			MsgType(param.MsgType).
-			Content(param.Content).
-			Build()).
-		Build()
-
-	// 发起请求
-	resp, err := client.Im.V1.Message.Create(context.Background(), req)
-
-	// 处理错误
+func CreateMessage(params CreateMessageParams) {
+	message := models.Message{
+		Subject:  params.subject,
+		To:       params.to,
+		Channel:  params.channel,
+		SourceID: params.sourceID,
+	}
+	message.MsgID = utils.GenerateSnowflakeID()
+	err := message.CreateMessage()
 	if err != nil {
-		fmt.Println(err)
-		return err
+		fmt.Println(err.Error())
 	}
 
-	// 服务端错误处理
-	if !resp.Success() {
-		fmt.Printf("logId: %s, error response: \n%s", resp.RequestId(), larkcore.Prettify(resp.CodeError))
+	messageQueue := models.MessageQueue{
+		Subject:  params.subject,
+		To:       params.to,
+		Channel:  params.channel,
+		MsgID:    message.MsgID,
+		Status:   MessageStatusCreated,
+		Priority: 1,
+	}
+	err = messageQueue.CreateMessageQueue()
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+}
+
+func SendMessage(s Sender, messageParams MessageParams) error {
+	if s == nil {
+		fmt.Println("sender is nil, 表示输入的channel有误")
+		return fmt.Errorf("sender is nil")
+	}
+	err := s.SendMessage(messageParams)
+	if err != nil {
+		fmt.Println(err.Error())
 		return err
 	}
-
-	// 业务处理
-	fmt.Println(larkcore.Prettify(resp))
 	return nil
+}
+
+// 从数据库MessageQueue货期消息，并发送
+func HandleMessage(msgIds []string) {
+	messageQueues, err := models.GetMessageQueueByMsgIDs(msgIds)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	//TODO: 先写成循环更新， 后面可以考虑批量更新以及多携程
+	for _, messageQueue := range messageQueues {
+		if messageQueue.Status == MessageStatusCreated {
+			messageQueue.Status = MessageStatusSending
+			err := messageQueue.UpdateMessageQueue()
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			message, err := models.GetMessageByMsgId(messageQueue.MsgID)
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			//TODO: 修改成template的形式
+			println(message.TemplateData)
+			content := fmt.Sprintf("{\"text\":\"不会哈气学哈气，机密咋摆你咋摆%d\"}", RandInt(0, 100))
+			messageParams := MessageParams{
+				ReceiveId: messageQueue.To,
+				Content:   content,
+				//TODO 暂时只支持text类型
+				MsgType: "text",
+			}
+			err = SendMessage(GetSender(messageQueue.Channel), messageParams)
+			if err != nil {
+				fmt.Println(err.Error())
+				messageQueue.Status = MessageStatusFail
+				//TODO: 失败重试
+				err = messageQueue.UpdateMessageQueue()
+				if err != nil {
+					fmt.Println(err.Error())
+					return
+				}
+			} else {
+				messageQueue.Status = MessageStatusSuccess
+				err = messageQueue.UpdateMessageQueue()
+				if err != nil {
+					fmt.Println(err.Error())
+					return
+				}
+			}
+		} else {
+			fmt.Println("消息状态不是created， 不处理")
+		}
+	}
+}
+
+func GetMessageFromCanal() []string {
+	return nil
+}
+
+// 在包初始化时设置随机种子
+func init() {
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+}
+
+// 新增随机数生成函数
+func RandInt(min, max int) int {
+	return rand.Intn(max-min+1) + min
 }

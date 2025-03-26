@@ -1,2 +1,10 @@
 app_id: cli_a76bcecb847d900e
 app_secret: cQzG1DMtkGBMUSdhnIza2gNffJsJJSaX
+
+mysql:
+  host: 127.0.0.1
+  port: 6699
+  user: root
+  password: 123456
+  database: MessagePush
+  charset: utf8mb4

@@ -10,15 +10,23 @@ import (
 
 type AppConfig struct {
 	// 改用 mapstructure 标签（Viper 底层使用）
-	AppId     string `mapstructure:"app_id"`
-	AppSecret string `mapstructure:"app_secret"`
+	AppId     string      `mapstructure:"app_id"`
+	AppSecret string      `mapstructure:"app_secret"`
+	MySQL     MySQLConfig `mapstructure:"mysql"`
+}
+type MySQLConfig struct {
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	Username string `mapstructure:"user"`
+	Pwd      string `mapstructure:"password"`
+	Database string `mapstructure:"database"`
 }
 
 // Global variable to hold the configuration
 var MyConfig AppConfig
 
 // init function to read the configuration file
-func init() {
+func InitConfig() {
 	// 改用绝对路径直接指定配置文件（跳过路径搜索）
 	viper.SetConfigFile("c:/Users/29236/Desktop/MessagePush/config/config.yaml")
 
@@ -40,7 +48,7 @@ func init() {
 	}
 
 	// 添加临时调试输出
-	fmt.Println("Raw config content:", viper.GetString("app_id"), viper.GetString("app_secret"))
+	fmt.Println("Raw config content:", viper.GetString("mysql.port"))
 
 	if err := viper.Unmarshal(&MyConfig); err != nil {
 		log.Fatalf("Unable to decode into struct: %v", err)
