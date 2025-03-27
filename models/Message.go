@@ -7,12 +7,9 @@ import (
 
 type Message struct {
 	ID           int64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	Subject      string    `gorm:"type:varchar(256)" json:"subject"`
-	To           string    `gorm:"type:varchar(256)" json:"to"`
 	MsgID        string    `gorm:"type:varchar(256);uniqueIndex" json:"msg_id"`
-	TemplateID   string    `gorm:"type:varchar(256)" json:"template_id"`
+	TemplateID   int64     `gorm:"type:bigint" json:"template_id"`  // 修改为MySQL支持的类型
 	TemplateData string    `gorm:"type:varchar(256)" json:"template_data"`
-	Channel      int       `gorm:"type:int(10)" json:"channel"`
 	SourceID     string    `gorm:"type:varchar(256)" json:"source_id"`
 	CreateTime   time.Time `gorm:"autoCreateTime" json:"create_time"`
 	ModifyTime   time.Time `gorm:"autoUpdateTime" json:"modify_time"`

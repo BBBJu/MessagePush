@@ -13,6 +13,7 @@ type AppConfig struct {
 	AppId     string      `mapstructure:"app_id"`
 	AppSecret string      `mapstructure:"app_secret"`
 	MySQL     MySQLConfig `mapstructure:"mysql"`
+	Redis     RedisConfig `mapstructure:"redis"`
 }
 type MySQLConfig struct {
 	Host     string `mapstructure:"host"`
@@ -20,6 +21,11 @@ type MySQLConfig struct {
 	Username string `mapstructure:"user"`
 	Pwd      string `mapstructure:"password"`
 	Database string `mapstructure:"database"`
+}
+type RedisConfig struct {
+	Addr     string `mapstructure:"addr"`
+	Password string `mapstructure:"password"`
+	DB       int    `mapstructure:"db"`
 }
 
 // Global variable to hold the configuration

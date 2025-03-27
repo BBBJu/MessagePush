@@ -1,6 +1,9 @@
 package service
 
-import "messagePush/config"
+import (
+	"errors"
+	"messagePush/config"
+)
 
 type MessageParams struct {
 	ReceiveId string
@@ -18,6 +21,18 @@ func GetSender(channel int) Sender {
 	case 1:
 		//TODO: 没有复用连接， 之后改成连接池复用
 		return NewLarkSender(config.MyConfig.AppId, config.MyConfig.AppSecret)
+	case 7788:
+		return NewErrorSender()
 	}
 	return nil
+}
+
+type ErrorSender struct {
+}
+
+func NewErrorSender() *ErrorSender {
+	return &ErrorSender{}
+}
+func (e *ErrorSender) SendMessage(sp MessageParams) error {
+	return errors.New("test retry")
 }

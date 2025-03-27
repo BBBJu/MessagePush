@@ -20,15 +20,40 @@ func main() {
 	//mySQL连接
 	config.InitConfig()
 	database.InitMySQL()
+	database.InitRedis()
 	models.Migrate()
 	utils.InitSnowflake(0)
-	Canal()
-	//test()
 
+	// 启动数据库轮询
+	go PollDatabase()
+
+	// 新增Redis扫描器
+	go service.StartRedisScanner()
+
+	// 保持主程序运行
+	select {}
+}
+
+func PollDatabase() {
+	ticker := time.NewTicker(1 * time.Second) // 每1秒轮询一次
+	defer ticker.Stop()
+	for {
+		fmt.Println("开始轮询数据库")
+		select {
+		case <-ticker.C:
+			messageQueues, err := models.GetPendingMessages(1000) // 默认一次获取1000条消息
+			if err != nil {
+				log.Println("Error fetching messages:", err)
+				continue
+			}
+			if len(messageQueues) > 0 {
+				service.HandleMessage(messageQueues) // 处理消息
+			}
+		}
+	}
 }
 
 func Canal() {
-
 	// 192.168.199.17 替换成你的canal server的地址
 	// example 替换成-e canal.destinations=example 你自己定义的名字
 	connector := client.NewSimpleCanalConnector("127.0.0.1", 11111, "", "", "example", 60000, 60*60*1000)
@@ -86,7 +111,8 @@ func Canal() {
 						printColumn(rowData.GetAfterColumns())
 					}
 				}
-				service.HandleMessage(msgIds)
+				//TODO: 修改参数
+				service.HandleMessage(nil)
 			}
 
 		}

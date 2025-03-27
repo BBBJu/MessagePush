@@ -1,5 +1,5 @@
-app_id: cli_a76bcecb847d900e
-app_secret: cQzG1DMtkGBMUSdhnIza2gNffJsJJSaX
+app_id: cli_a7691dde4ab5900e
+app_secret: a7ZlzG8ZhNtZxVr23xE6Td1eSZptS0mf
 
 mysql:
   host: 127.0.0.1
@@ -8,3 +8,8 @@ mysql:
   password: 123456
   database: MessagePush
   charset: utf8mb4
+
+redis:
+  addr: "localhost:6670"
+  password: ""
+  db: 0  # 使用0号数据库

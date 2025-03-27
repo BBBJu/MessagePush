@@ -1,8 +1,8 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
-	"math/rand"
 	"messagePush/models"
 	"messagePush/utils"
 	"time"
@@ -13,35 +13,45 @@ const (
 	MessageStatusSending = 2
 	MessageStatusSuccess = 3
 	MessageStatusFail    = 4
+	MessageStatusDead    = 5 //超过重试次数，代表死亡
+)
+
+const (
+	NormalPriority = 1
+	VIPPriority    = 100
 )
 
 type CreateMessageParams struct {
-	subject  string
-	to       string
-	channel  int
-	sourceID string
+	subject      string
+	to           string
+	channel      int
+	sourceID     string
+	templateId   int64
+	templateData string
+	priority     int64
 }
 
 func CreateMessage(params CreateMessageParams) {
+	//TODO: 事务
 	message := models.Message{
-		Subject:  params.subject,
-		To:       params.to,
-		Channel:  params.channel,
-		SourceID: params.sourceID,
+		SourceID:     params.sourceID,
+		TemplateID:   params.templateId,
+		TemplateData: params.templateData,
 	}
 	message.MsgID = utils.GenerateSnowflakeID()
 	err := message.CreateMessage()
 	if err != nil {
 		fmt.Println(err.Error())
 	}
-
 	messageQueue := models.MessageQueue{
-		Subject:  params.subject,
-		To:       params.to,
-		Channel:  params.channel,
-		MsgID:    message.MsgID,
-		Status:   MessageStatusCreated,
-		Priority: 1,
+		MsgID:      message.MsgID,
+		To:         params.to,
+		Subject:    params.subject,
+		Channel:    params.channel,
+		Status:     MessageStatusCreated,
+		Priority:   params.priority,
+		OrderBy:    time.Now().Unix() - params.priority,
+		RetryCount: 0,
 	}
 	err = messageQueue.CreateMessageQueue()
 	if err != nil {
@@ -63,15 +73,10 @@ func SendMessage(s Sender, messageParams MessageParams) error {
 }
 
 // 从数据库MessageQueue货期消息，并发送
-func HandleMessage(msgIds []string) {
-	messageQueues, err := models.GetMessageQueueByMsgIDs(msgIds)
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
+func HandleMessage(messageQueues []models.MessageQueue) {
 	//TODO: 先写成循环更新， 后面可以考虑批量更新以及多携程
 	for _, messageQueue := range messageQueues {
-		if messageQueue.Status == MessageStatusCreated {
+		if messageQueue.Status == MessageStatusCreated || messageQueue.Status == MessageStatusFail {
 			messageQueue.Status = MessageStatusSending
 			err := messageQueue.UpdateMessageQueue()
 			if err != nil {
@@ -83,9 +88,7 @@ func HandleMessage(msgIds []string) {
 				fmt.Println(err.Error())
 				return
 			}
-			//TODO: 修改成template的形式
-			println(message.TemplateData)
-			content := fmt.Sprintf("{\"text\":\"不会哈气学哈气，机密咋摆你咋摆%d\"}", RandInt(0, 100))
+			content := DoTemplate(&message)
 			messageParams := MessageParams{
 				ReceiveId: messageQueue.To,
 				Content:   content,
@@ -94,21 +97,20 @@ func HandleMessage(msgIds []string) {
 			}
 			err = SendMessage(GetSender(messageQueue.Channel), messageParams)
 			if err != nil {
-				fmt.Println(err.Error())
-				messageQueue.Status = MessageStatusFail
-				//TODO: 失败重试
-				err = messageQueue.UpdateMessageQueue()
-				if err != nil {
-					fmt.Println(err.Error())
-					return
+				//最多重试五次
+				if messageQueue.RetryCount < 5 {
+					messageQueue.RetryCount += 1
+					messageQueue.Status = MessageStatusFail
+					fmt.Println("重试", messageQueue.MsgID, "次数", messageQueue.RetryCount)
+					//重试不修改order_by优先级，追求时效性
+					messageQueue.UpdateMessageQueue()
+				} else {
+					messageQueue.Status = MessageStatusDead
+					messageQueue.UpdateMessageQueue()
 				}
 			} else {
 				messageQueue.Status = MessageStatusSuccess
-				err = messageQueue.UpdateMessageQueue()
-				if err != nil {
-					fmt.Println(err.Error())
-					return
-				}
+				messageQueue.UpdateMessageQueue()
 			}
 		} else {
 			fmt.Println("消息状态不是created， 不处理")
@@ -116,16 +118,44 @@ func HandleMessage(msgIds []string) {
 	}
 }
 
-func GetMessageFromCanal() []string {
-	return nil
+func MessageDaemon() {
+	ticker := time.NewTicker(10 * time.Second) // 创建10秒间隔的定时器
+	defer ticker.Stop()                        // 函数退出时停止ticker
+	for {
+		select {
+		case <-ticker.C: // 每10秒触发一次
+
+			messageQueues, err := models.GetFailedMessageQueue()
+			if err != nil {
+				fmt.Println(err.Error())
+				return
+			}
+			msgIds := make([]string, len(messageQueues))
+			for i, messageQueue := range messageQueues {
+				msgIds[i] = messageQueue.MsgID
+			}
+			//TODO: 修改参数
+			HandleMessage(nil)
+		}
+	}
 }
 
-// 在包初始化时设置随机种子
-func init() {
-	rand.New(rand.NewSource(time.Now().UnixNano()))
-}
+func DoTemplate(message *models.Message) string {
+	//默认使用第一个模板
+	if message.TemplateID == 0 {
+		message.TemplateID = 1
+	}
+	var data map[string]interface{}
+	err := json.Unmarshal([]byte(message.TemplateData), &data)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	myTemlate := models.Template{
+		ID: message.TemplateID,
+	}
+	myTemlate.GetTemplateById()
 
-// 新增随机数生成函数
-func RandInt(min, max int) int {
-	return rand.Intn(max-min+1) + min
+	content := utils.GetContentAfterTemplate(data, myTemlate)
+	content = fmt.Sprintf("{\"text\":\"%s\"}", content)
+	return content
 }
