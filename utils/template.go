@@ -18,6 +18,6 @@ func GetContentAfterTemplate(templateData map[string]interface{}, myTemplate mod
 	if err != nil {
 		fmt.Printf("模板渲染失败: %v", err)
 	}
-	fmt.Println("渲染结果:", result.String())
+	//fmt.Println("渲染结果:", result.String())
 	return result.String()
 }

@@ -10,9 +10,9 @@ import (
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 )
 
-var MyLarkSender *LarkSender
+var MyLarkSender *LarkSender = nil
 
-func init() {
+func InitLarkSender() {
 	MyLarkSender = NewLarkSender(config.MyConfig.AppId, config.MyConfig.AppSecret)
 }
 
@@ -60,6 +60,6 @@ func (l *LarkSender) SendMessage(param MessageParams) error {
 	}
 
 	// 业务处理
-	fmt.Println(larkcore.Prettify(resp))
+	//fmt.Println(larkcore.Prettify(resp))
 	return nil
 }

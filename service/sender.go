@@ -2,8 +2,15 @@ package service
 
 import (
 	"errors"
-	"messagePush/config"
 )
+
+var (
+	MyErrorSender = &ErrorSender{}
+)
+
+func InitSender() {
+	InitLarkSender()
+}
 
 type MessageParams struct {
 	ReceiveId string
@@ -20,9 +27,9 @@ func GetSender(channel int) Sender {
 	switch channel {
 	case 1:
 		//TODO: 没有复用连接， 之后改成连接池复用
-		return NewLarkSender(config.MyConfig.AppId, config.MyConfig.AppSecret)
+		return MyLarkSender
 	case 7788:
-		return NewErrorSender()
+		return MyErrorSender
 	}
 	return nil
 }

@@ -21,14 +21,16 @@ func main() {
 	config.InitConfig()
 	database.InitMySQL()
 	database.InitRedis()
+	service.InitSender()
 	models.Migrate()
 	utils.InitSnowflake(0)
 
 	// 启动数据库轮询
 	go PollDatabase()
-
 	// 新增Redis扫描器
 	go service.StartRedisScanner()
+	//压力测试
+	go service.StartStressTest()
 
 	// 保持主程序运行
 	select {}
@@ -111,7 +113,7 @@ func Canal() {
 						printColumn(rowData.GetAfterColumns())
 					}
 				}
-				//TODO: 修改参数
+				//: 修改参数
 				service.HandleMessage(nil)
 			}
 

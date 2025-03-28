@@ -75,19 +75,21 @@ func SendMessage(s Sender, messageParams MessageParams) error {
 // 从数据库MessageQueue货期消息，并发送
 func HandleMessage(messageQueues []models.MessageQueue) {
 	//TODO: 先写成循环更新， 后面可以考虑批量更新以及多携程
-	for _, messageQueue := range messageQueues {
+	MsgIds := make([]string, len(messageQueues))
+	for i, messageQueue := range messageQueues {
+		MsgIds[i] = messageQueue.MsgID
+	}
+	//messages的顺序和messageQueues的顺序一致,其实也可以把messages做成一个map，key是msgId，value是message
+	messages, err := models.BatchGetMessageByMsgIds(MsgIds)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	for i, messageQueue := range messageQueues {
 		if messageQueue.Status == MessageStatusCreated || messageQueue.Status == MessageStatusFail {
 			messageQueue.Status = MessageStatusSending
-			err := messageQueue.UpdateMessageQueue()
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-			message, err := models.GetMessageByMsgId(messageQueue.MsgID)
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
+			message := messages[i]
 			content := DoTemplate(&message)
 			messageParams := MessageParams{
 				ReceiveId: messageQueue.To,
@@ -99,22 +101,26 @@ func HandleMessage(messageQueues []models.MessageQueue) {
 			if err != nil {
 				//最多重试五次
 				if messageQueue.RetryCount < 5 {
+					//重试不修改order_by优先级，追求时效性
 					messageQueue.RetryCount += 1
 					messageQueue.Status = MessageStatusFail
 					fmt.Println("重试", messageQueue.MsgID, "次数", messageQueue.RetryCount)
-					//重试不修改order_by优先级，追求时效性
-					messageQueue.UpdateMessageQueue()
 				} else {
 					messageQueue.Status = MessageStatusDead
-					messageQueue.UpdateMessageQueue()
+					FailedCount.Add(1)
 				}
 			} else {
 				messageQueue.Status = MessageStatusSuccess
-				messageQueue.UpdateMessageQueue()
+				SuccessCount.Add(1)
 			}
 		} else {
 			fmt.Println("消息状态不是created， 不处理")
 		}
+	}
+	err = models.BatchUpdateMessageQueue(messageQueues)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
 	}
 }
 

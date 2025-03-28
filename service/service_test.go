@@ -79,4 +79,5 @@ func Init() {
 	database.InitRedis()
 	models.Migrate()
 	utils.InitSnowflake(0)
+	InitSender()
 }

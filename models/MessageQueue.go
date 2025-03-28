@@ -44,6 +44,9 @@ func GetMessageQueueByMsgIDs(msgID []string) ([]MessageQueue, error) {
 func (mq *MessageQueue) UpdateMessageQueue() error {
 	return database.DB.Save(mq).Error
 }
+func BatchUpdateMessageQueue(messageQueues []MessageQueue) error {
+	return database.DB.Save(messageQueues).Error
+}
 
 func GetFailedMessageQueue() ([]MessageQueue, error) {
 	messageQueues := make([]MessageQueue, 0)
